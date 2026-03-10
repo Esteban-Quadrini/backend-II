@@ -1,78 +1,68 @@
-const User = require('../models/User');
-const { hashPassword } = require('../utils/hash');
+
+const { body, validationResult } = require('express-validator');
+const UserService = require('../services/UserService');
+const PasswordResetService = require('../services/PasswordResetService');
+const UserRepository = require('../repositories/UserRepository');
+const UserDTO = require('../dtos/UserDTO');
+
+exports.validateCreate = [
+  body('first_name').notEmpty(),
+  body('email').isEmail(),
+  body('password').isLength({ min: 6 }),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    next();
+  }
+];
 
 exports.createUser = async (req, res) => {
   try {
-    const { first_name, last_name, email, age, password, cart, role } = req.body;
-    if (!first_name || !last_name || !email || !password) {
-      return res.status(400).json({ error: 'Faltan campos requeridos' });
-    }
-
-    const existing = await User.findOne({ email });
-    if (existing) return res.status(409).json({ error: 'Email ya registrado' });
-
-    const hashed = hashPassword(password); 
-    const user = await User.create({ first_name, last_name, email, age, password: hashed, cart, role });
-
-    const userObj = user.toObject();
-    delete userObj.password;
-    res.status(201).json(userObj);
+    const user = await UserService.createUser(req.body);
+    res.status(201).json(new UserDTO(user));
   } catch (err) {
-    console.error(err);
-    if (err.code === 11000) return res.status(409).json({ error: 'Email ya registrado' });
-    res.status(500).json({ error: 'Error creando usuario' });
+    res.status(err.status || 500).json({ error: err.message || err });
+  }
+};
+
+exports.currentUser = async (req, res) => {
+  // req.user proviene del middleware auth
+  res.json(new UserDTO(req.user));
+};
+
+exports.requestPasswordReset = async (req, res) => {
+  try {
+    await PasswordResetService.requestReset(req.body.email);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || err });
+  }
+};
+
+exports.resetPassword = async (req, res) => {
+  try {
+    await PasswordResetService.resetPassword(req.params.token, req.body.password);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || err });
   }
 };
 
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find({}, '-password').lean();
-    res.json(users);
+    const users = await UserService.getAllUsers();
+    res.json(users.map(u => new UserDTO(u)));
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Error obteniendo usuarios' });
   }
 };
 
-exports.getUserById = async (req, res) => {
+exports.addToCart = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id, '-password').lean();
-    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
-    res.json(user);
+    const { productId, quantity } = req.body;
+    const updated = await UserRepository.addToCart(req.user._id, productId, quantity || 1);
+    res.json({ ok: true, cart: updated.cart });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error obteniendo usuario' });
-  }
-};
-
-exports.updateUser = async (req, res) => {
-  try {
-    const updates = { ...req.body };
-    if (updates.password) {
-      updates.password = hashPassword(updates.password);
-    }
-    
-    if (updates.email) {
-      const other = await User.findOne({ email: updates.email, _id: { $ne: req.params.id } });
-      if (other) return res.status(409).json({ error: 'Email ya registrado por otro usuario' });
-    }
-    const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true, select: '-password' }).lean();
-    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
-    res.json(user);
-  } catch (err) {
-    console.error(err);
-    if (err.code === 11000) return res.status(409).json({ error: 'Email ya registrado' });
-    res.status(500).json({ error: 'Error actualizando usuario' });
-  }
-};
-
-exports.deleteUser = async (req, res) => {
-  try {
-    const user = await User.findByIdAndDelete(req.params.id).lean();
-    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
-    res.json({ message: 'Usuario eliminado' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error eliminando usuario' });
+    res.status(400).json({ error: err.message || err });
   }
 };

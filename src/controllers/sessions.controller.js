@@ -1,16 +1,15 @@
-const jwt = require('jsonwebtoken');
 
-exports.generateToken = (user) => {
-  const payload = { id: user._id, email: user.email, role: user.role };
-  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '1h' });
-};
+const AuthService = require('../services/AuthService');
+const UserDTO = require('../dtos/UserDTO');
 
-exports.current = async (req, res) => {
+exports.login = async (req, res, next) => {
   try {
-    if (!req.user) return res.status(401).json({ error: 'No auth token' });
-    res.json(req.user);
+    const { email, password } = req.body;
+    const user = await AuthService.validateCredentials(email, password);
+    if (!user) return res.status(401).json({ error: 'Credenciales inválidas' });
+    const token = AuthService.generateToken(user);
+    res.json({ token, user: new UserDTO(user) });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error obteniendo usuario actual' });
+    next(err);
   }
 };

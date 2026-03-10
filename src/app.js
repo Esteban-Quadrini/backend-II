@@ -1,25 +1,28 @@
+
+require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
-const passport = require('passport');
+const morgan = require('morgan');
+const connectDB = require('./utils/db');
 
 const usersRouter = require('./routes/users.router');
 const sessionsRouter = require('./routes/sessions.router');
+const purchaseRouter = require('./routes/purchase.router');
 
 const app = express();
 
-app.use(cors());
 app.use(express.json());
+app.use(morgan('dev'));
 
-// Passport
-app.use(passport.initialize());
-require('./config/passport')(passport);
-require('./config/jwt')(passport); // stub para mantener estructura
 
-// Routers
+app.use((req, res, next) => {
+  console.log(`[REQUEST] ${new Date().toISOString()} ${req.method} ${req.url}`);
+  next();
+});
+
 app.use('/api/users', usersRouter);
 app.use('/api/sessions', sessionsRouter);
+app.use('/api/purchase', purchaseRouter);
 
-// Health check
 app.get('/', (req, res) => res.send('API running'));
 
-module.exports = app;
+module.exports = { app, connectDB };

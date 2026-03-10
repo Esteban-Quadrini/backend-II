@@ -1,12 +1,11 @@
+
 const bcrypt = require('bcrypt');
 
-const saltRounds = parseInt(process.env.SALT_ROUNDS || '10', 10);
-
-exports.hashPassword = (plain) => {
-  
-  return bcrypt.hashSync(plain, saltRounds);
+const hashPassword = async (password) => {
+  const salt = await bcrypt.genSalt(10);
+  return bcrypt.hash(password, salt);
 };
 
-exports.comparePassword = (plain, hash) => {
-  return bcrypt.compareSync(plain, hash);
-};
+const comparePassword = (password, hash) => bcrypt.compare(password, hash);
+
+module.exports = { hashPassword, comparePassword };
